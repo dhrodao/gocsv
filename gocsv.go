@@ -36,21 +36,21 @@ var ErrUnsuportedType = errors.New("unsupported type")
 // column as a slice of any.
 // The 'values' slice will contain the data of the CSV file
 type Document struct {
-	headerValues map[string][]any
+	headerValues []string
 	values       [][]any
 }
 
 // This function returns the header values of the CSV Document
-func (d *Document) Header() map[string][]any {
-	return d.headerValues
+func (d *Document) Header() *[]string {
+	return &d.headerValues
 }
 
 // This function returns the values of the CSV Document
-func (d *Document) Data() [][]any {
-	return d.values
+func (d *Document) Data() *[][]any {
+	return &d.values
 }
 
-// The Decoder type used to parse a *.csv file
+// The Decoder type used to decode a *.csv file
 type Decoder struct {
 	scanner      bufio.Scanner
 	sep          rune
@@ -92,9 +92,9 @@ func (d *Decoder) Error() error {
 // This function reads from the buffered input and writes
 // the decoded data to the CSV Document
 func (d *Decoder) Decode(csv *Document) error {
-	// Parse the header if needed
+	// Decode the header if needed
 	if d.headerValues != nil {
-		d.parseHeader()
+		d.decodeHeader()
 	}
 	for {
 		line, err := d.readLine()
@@ -105,7 +105,6 @@ func (d *Decoder) Decode(csv *Document) error {
 		if err == ErrLineEmpty {
 			continue
 		}
-		// TODO handle: RFC 4180: If \n between double quotes, it is part of the field
 		d.unmarshal(line, csv)
 	}
 	return nil
@@ -127,15 +126,14 @@ func (d *Decoder) readLine() (string, error) {
 	return "", ErrEof
 }
 
-// This function parses a header of a CSV document
-func (d *Decoder) parseHeader() error {
+// This function decodes a header of a CSV document
+func (d *Decoder) decodeHeader() error {
 	line, err := d.readLine()
 	if err != nil {
 		return err
 	}
 
 	d.headerValues = strings.Split(line, string(d.sep))
-
 	return nil
 }
 
@@ -167,9 +165,19 @@ func (d *Decoder) unmarshal(line string, doc *Document) error {
 			merged = v[1:]
 		case strings.HasSuffix(v, StringWrapper):
 			// (1) .. , " text , text" , .. (2nd part)
-			merged = strings.Join([]string{merged, v[:len(v)-1]}, string(d.sep))
-			combinedTokens = append(combinedTokens, merged)
-			merged = ""
+			// This token is part of the previous line token
+			if merged == "" {
+				if len(doc.values) == 0 {
+					d.headerValues[len(d.headerValues)-1] = (d.headerValues[len(d.headerValues)-1] + v[:len(v)-1])
+				} else {
+					prevToken := doc.values[len(doc.values)-1][len(doc.values[len(doc.values)-1])-1]
+					doc.values[len(doc.values)-1][len(doc.values[len(doc.values)-1])-1] = (prevToken.(string) + v[:len(v)-1])
+				}
+			} else {
+				merged = strings.Join([]string{merged, v[:len(v)-1]}, string(d.sep))
+				combinedTokens = append(combinedTokens, merged)
+				merged = ""
+			}
 		default:
 			// (1) .. " , text , text , " .. (middle part)
 			if merged != "" {
@@ -178,6 +186,12 @@ func (d *Decoder) unmarshal(line string, doc *Document) error {
 				combinedTokens = append(combinedTokens, v)
 			}
 		}
+	}
+
+	// (1) .. "text\ntext", ..
+	// This token is incomplete, so we need to wait for the next line
+	if merged != "" {
+		combinedTokens = append(combinedTokens, merged+NewLine)
 	}
 
 	tokens = combinedTokens
@@ -201,26 +215,20 @@ func (d *Decoder) unmarshal(line string, doc *Document) error {
 		}
 	}
 
-	// If the document has a header, add the values to the map
+	// If the document has a header, set the header slice
 	if d.headerValues != nil {
 		if len(lineData) != len(d.headerValues) {
 			d.err = ErrHeaderRowLenMismatch
 			return d.err
 		}
-
 		if doc.headerValues == nil {
-			doc.headerValues = make(map[string][]any)
-		}
-
-		for i, v := range d.headerValues {
-			if doc.headerValues[v] == nil {
-				doc.headerValues[v] = make([]any, 0)
-			}
-			doc.headerValues[v] = append(doc.headerValues[v], lineData[i])
+			doc.headerValues = d.headerValues
 		}
 	}
 
-	doc.values = append(doc.values, lineData)
+	if len(lineData) > 0 {
+		doc.values = append(doc.values, lineData)
+	}
 
 	return nil
 }
@@ -276,9 +284,9 @@ func (e *Encoder) writeHeader(doc *Document) error {
 		return nil
 	}
 
-	header := make([]any, 0, len(doc.values[0]))
-	for k := range doc.headerValues {
-		header = append(header, k)
+	header := make([]any, 0, len(doc.headerValues))
+	for _, v := range doc.headerValues {
+		header = append(header, v)
 	}
 	return e.marshall(header)
 }
@@ -310,7 +318,8 @@ func (e *Encoder) marshall(records []any) error {
 			// If the line contains the separator or double quotes
 			// wrap it in double quotes
 			if strings.Contains(record, string(e.sep)) ||
-				strings.Contains(record, "\"\"") {
+				strings.Contains(record, "\"\"") ||
+				strings.Contains(record, NewLine) {
 				record = StringWrapper + record + StringWrapper
 			}
 			values = append(values, record)

@@ -27,21 +27,14 @@ func TestWithHeaderAndCarriageReturn(t *testing.T) {
 	assert.Nil(t, decoder.Decode(&decoded))
 
 	// Check document header
-	assert.Equal(t, len(decoded.Header()), 2)
-	assert.NotNil(t, decoded.Header()["name"])
-	assert.NotNil(t, decoded.Header()["age"])
+	assert.Equal(t, len(*decoded.Header()), 2)
+	assert.ObjectsAreEqual(decoded.Header(), []string{"name", "age"})
 
 	// Check document contents
-	expected := [][]any{
+	assert.EqualValues(t, [][]any{
 		{"John, Michael", 25},
 		{"Jane", 23},
-	}
-	for i, row := range decoded.Data() {
-		assert.Equal(t, len(row), 2)
-		for j, col := range row {
-			assert.Equal(t, col, expected[i][j])
-		}
-	}
+	}, *decoded.Data())
 
 	t.Logf("Decoded document: %v", decoded)
 
@@ -63,21 +56,40 @@ func TestWithQuotedString(t *testing.T) {
 	assert.Nil(t, decoder.Decode(&decoded))
 
 	// Check document header
-	assert.Nil(t, decoded.Header())
+	assert.Nil(t, *decoded.Header())
 
 	// Check document contents
-	expected := [][]any{
+	assert.EqualValues(t, [][]any{
 		{"a", "b", "c", "d"},
 		{1, 2, 3, 4},
 		{1.2, 2.3, 3.4, 5.6},
 		{"\"this\" is a \"test\"", "\"test\"", "test", "test"},
-	}
-	for i, row := range decoded.Data() {
-		assert.Equal(t, len(row), len(expected[i]))
-		for j, col := range row {
-			assert.Equal(t, col, expected[i][j])
-		}
-	}
+	}, *decoded.Data())
+
+	t.Logf("Decoded document: %v", decoded)
+
+	var buffer bytes.Buffer
+	assert.Nil(t, gocsv.NewEncoder(&buffer).Encode(&decoded))
+	assert.Equal(t, input, buffer.String())
+
+	t.Logf("Encoded document: %v", buffer.String())
+}
+
+func TestWithNewLineInQuotedString(t *testing.T) {
+	input := "a,b,c,\"d\ne\"\n1,2,3,4\n"
+	reader := strings.NewReader(input)
+
+	var decoded gocsv.Document
+	assert.Nil(t, gocsv.NewDecoder(reader).Decode(&decoded))
+
+	// Check document header
+	assert.Nil(t, *decoded.Header())
+
+	// Check document contents
+	assert.EqualValues(t, [][]any{
+		{"a", "b", "c", "d\ne"},
+		{1, 2, 3, 4},
+	}, *decoded.Data())
 
 	t.Logf("Decoded document: %v", decoded)
 
