@@ -167,12 +167,8 @@ func (d *Decoder) unmarshal(line string, doc *Document) error {
 			// (1) .. , " text , text" , .. (2nd part)
 			// This token is part of the previous line token
 			if merged == "" {
-				if len(doc.values) == 0 {
-					d.headerValues[len(d.headerValues)-1] = (d.headerValues[len(d.headerValues)-1] + v[:len(v)-1])
-				} else {
-					prevToken := doc.values[len(doc.values)-1][len(doc.values[len(doc.values)-1])-1]
-					doc.values[len(doc.values)-1][len(doc.values[len(doc.values)-1])-1] = (prevToken.(string) + v[:len(v)-1])
-				}
+				prevToken := doc.values[len(doc.values)-1][len(doc.values[len(doc.values)-1])-1]
+				doc.values[len(doc.values)-1][len(doc.values[len(doc.values)-1])-1] = (prevToken.(string) + v[:len(v)-1])
 			} else {
 				merged = strings.Join([]string{merged, v[:len(v)-1]}, string(d.sep))
 				combinedTokens = append(combinedTokens, merged)
