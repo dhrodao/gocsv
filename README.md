@@ -9,8 +9,7 @@ Features:
 
 Decoding snippet:
 ```Go
-var decoded gocsv.Document
-if err := gocsv.NewDecoder(reader).Decode(&decoded); err != nil {
+if err := gocsv.NewDecoder(reader).Decode(&records); err != nil {
     panic("error decoding csv")
 }
 ```
