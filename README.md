@@ -9,17 +9,76 @@ Features:
 * support Marshal/Unmarshal custom structures
 
 Decoding snippet:
-```Go
-if err := gocsv.NewDecoder(reader).Decode(&records); err != nil {
-	...
+```go:examples/decode/example_decode.go
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"strings"
+
+	"github.com/dhrodao/gocsv"
+)
+
+type Person struct {
+	Name string `csv:"Name"`
+	Age  int64  `csv:"Age"`
+}
+
+func main() {
+	input := "John;25\nMichael;50"
+	reader := strings.NewReader(input)
+
+	decoder := gocsv.NewDecoder(reader)
+	decoder.SetReader(func() gocsv.CSVReader {
+		r := csv.NewReader(reader)
+		r.Comma = ';'
+		return r
+	})
+
+	var records []*Person
+	if err := decoder.Decode(&records); err != nil {
+		panic("Error decoding!")
+	}
+
+	for _, record := range records {
+		fmt.Println(record)
+	}
 }
 ```
 
 Encoding snippet:
-```Go
-var buffer bytes.Buffer
-if err := gocsv.NewEncoder(&buffer).Encode(&decoded); err != nil {
-	...
+```go:examples/encode/example_encode.go
+package main
+
+import (
+	"bytes"
+	"encoding/csv"
+	"fmt"
+
+	"github.com/dhrodao/gocsv"
+)
+
+type Person struct {
+	Name string `csv:"Name"`
+	Age  int64  `csv:"Age"`
+}
+
+func main() {
+	var buffer bytes.Buffer
+	decoder := gocsv.NewEncoder(&buffer)
+	decoder.SetWriter(func() gocsv.CSVWriter {
+		w := csv.NewWriter(&buffer)
+		w.UseCRLF = true
+		return w
+	})
+
+	var records []*Person
+	if err := decoder.Encode(&records); err != nil {
+		panic("Error decoding!")
+	}
+
+	fmt.Println(buffer.String())
 }
 ```
 
