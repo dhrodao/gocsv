@@ -6,6 +6,10 @@ import (
 	"reflect"
 )
 
+type Marshaler interface {
+	MarshalCSV() (string, error)
+}
+
 // This is the structure that holds the CSV Encoder data
 type Encoder struct {
 	writer CSVWriter

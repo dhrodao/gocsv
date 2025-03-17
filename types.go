@@ -66,7 +66,7 @@ func setValue(value reflect.Value, valStr string) error {
 	return nil
 }
 
-func toString(val any) (string, error) {
+func toString(val any) (outStr string, err error) {
 	inVal := reflect.ValueOf(val)
 
 	switch inVal.Kind() {
@@ -86,6 +86,17 @@ func toString(val any) (string, error) {
 		return strconv.FormatFloat(inVal.Float(), byte('f'), -1, 32), nil
 	case reflect.Float64:
 		return strconv.FormatFloat(inVal.Float(), byte('f'), -1, 64), nil
+	default:
+		newVal := reflect.New(inVal.Type())
+		if interfaceVal, ok := newVal.Interface().(Marshaler); ok {
+			newVal.Elem().Set(inVal)
+			if outStr, err = interfaceVal.(Marshaler).MarshalCSV(); err != nil {
+				return "", err
+			}
+			return outStr, err
+		} else {
+			// TODO: check if type if subtype of primitive type
+		}
 	}
 
 	return "", fmt.Errorf("unknown conversion from %s to string", inVal.Kind())

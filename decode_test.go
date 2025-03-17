@@ -103,6 +103,10 @@ func (d *BirthDate) UnmarshalCSV(str string) (err error) {
 	return err
 }
 
+func (d *BirthDate) MarshalCSV() (string, error) {
+	return d.Time.Format("20060201"), nil
+}
+
 type C struct {
 	A         A
 	BirthDate BirthDate `csv:"birthdate"`
