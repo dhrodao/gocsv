@@ -1,6 +1,7 @@
 package gocsv
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -9,17 +10,23 @@ import (
 
 var ErrHeaderEmpty = errors.New("empty header")
 
-// This type will be used to Unmarshal custom types
-// from the CSV
+// This interface represents a CSV reader (by default csv.Reader)
+// It allows the user to customize the reader used
+type CSVReader interface {
+	Read() ([]string, error)
+	ReadAll() ([][]string, error)
+}
+
+// This interface defines a contract to define custom
+// types that could be unmarshaled
 type Unmarshaler interface {
 	UnmarshalCSV(str string) error
 }
 
 // The Decoder type used to decode a *.csv file
 type Decoder struct {
-	scanner        CSVReader
-	sep            rune
-	headerValues   []string
+	reader         CSVReader
+	header         []string
 	containsHeader bool
 	currentLine    int
 	err            error
@@ -28,26 +35,21 @@ type Decoder struct {
 // This function creates a CSV Decoder and returns it
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{
-		scanner:      NewCSVReader(r),
-		sep:          Separator,
-		headerValues: nil,
-		currentLine:  0,
-		err:          nil,
+		reader:      csv.NewReader(r),
+		header:      nil,
+		currentLine: 0,
+		err:         nil,
 	}
-}
-
-// This function sets a separator string for the CSV Decoder
-func (d *Decoder) Separator(s rune) {
-	d.sep = s
-}
-
-func (d *Decoder) Comment(comment rune) {
-	d.scanner.comment = comment
 }
 
 // This function toggles the header parsing for a CSV document
 func (d *Decoder) ContainsHeader(v bool) {
 	d.containsHeader = v
+}
+
+// This function allows the user to customise the CSV reader
+func (d *Decoder) SetReader(create func() CSVReader) {
+	d.reader = create()
 }
 
 // This function returns the error of the CSV Decoder
@@ -79,9 +81,9 @@ func (d *Decoder) Decode(out any) error {
 
 	// Decode the header from the struct tags
 	if !d.containsHeader {
-		d.headerValues = make([]string, 0, len(typeInfo.fields))
+		d.header = make([]string, 0, len(typeInfo.fields))
 		for _, v := range typeInfo.fields {
-			d.headerValues = append(d.headerValues, v.fTag)
+			d.header = append(d.header, v.fTag)
 		}
 	} else {
 		// Decode header from the input
@@ -90,7 +92,7 @@ func (d *Decoder) Decode(out any) error {
 		}
 	}
 
-	lines, err := d.scanner.ReadAll()
+	lines, err := d.reader.ReadAll()
 	if err != nil {
 		return err
 	}
@@ -99,8 +101,8 @@ func (d *Decoder) Decode(out any) error {
 		return errors.New("decode: empty CSV file")
 	}
 
-	if len(lines[0]) != len(d.headerValues) {
-		return fmt.Errorf("decode: header len (%d) is not equal to content len (%d)", len(lines[0]), len(d.headerValues))
+	if len(lines[0]) != len(d.header) {
+		return fmt.Errorf("decode: header len (%d) is not equal to content len (%d)", len(lines[0]), len(d.header))
 	}
 
 	if err := ensureOutCapacity(outVal, len(lines)); err != nil {
@@ -193,17 +195,17 @@ func ensureOutCapacity(out reflect.Value, lenght int) error {
 
 // This function decodes a header of a CSV document
 func (d *Decoder) decodeHeader() error {
-	if d.headerValues == nil {
-		d.headerValues = make([]string, 0)
+	if d.header == nil {
+		d.header = make([]string, 0)
 	}
 
-	line, err := d.scanner.Read()
+	line, err := d.reader.Read()
 	if err != nil {
 		return err
 	}
 
-	d.headerValues = line
-	if len(d.headerValues) == 0 {
+	d.header = line
+	if len(d.header) == 0 {
 		return ErrHeaderEmpty
 	}
 	return nil

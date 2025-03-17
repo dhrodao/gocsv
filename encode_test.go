@@ -2,6 +2,7 @@ package gocsv_test
 
 import (
 	"bytes"
+	"encoding/csv"
 	"testing"
 	"time"
 
@@ -18,14 +19,18 @@ func TestEncodeWithCarriageReturnAndQuotedString(t *testing.T) {
 
 	var buffer bytes.Buffer
 	encoder := gocsv.NewEncoder(&buffer)
-	encoder.CarriageReturn()
+	encoder.SetWriter(func() gocsv.CSVWriter {
+		w := csv.NewWriter(&buffer)
+		w.UseCRLF = true
+		return w
+	})
 	assert.Nil(t, encoder.Encode(decoded))
 
 	assert.Equal(t, expected, buffer.String())
 }
 
 func TestEncodeWithNewLineInQuotedString(t *testing.T) {
-	expected := "Name,Age\r\n\"John, Francis\",25\r\n\"Michael\nnewline\",43\r\n"
+	expected := "Name,Age\r\n\"John, Francis\",25\r\n\"Michael\r\nnewline\",43\r\n"
 	decoded := []A{
 		{Name: "John, Francis", Age: 25},
 		{Name: "Michael\nnewline", Age: 43},
@@ -33,7 +38,11 @@ func TestEncodeWithNewLineInQuotedString(t *testing.T) {
 
 	var buffer bytes.Buffer
 	encoder := gocsv.NewEncoder(&buffer)
-	encoder.CarriageReturn()
+	encoder.SetWriter(func() gocsv.CSVWriter {
+		w := csv.NewWriter(&buffer)
+		w.UseCRLF = true
+		return w
+	})
 	assert.Nil(t, encoder.Encode(decoded))
 
 	assert.Equal(t, expected, buffer.String())

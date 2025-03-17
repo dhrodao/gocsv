@@ -1,11 +1,19 @@
 package gocsv
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io"
 	"reflect"
 )
 
+type CSVWriter interface {
+	Write(record []string) error
+	WriteAll(records [][]string) error
+}
+
+// This interface defines a contract to define custom
+// types that could be marshaled
 type Marshaler interface {
 	MarshalCSV() (string, error)
 }
@@ -20,19 +28,14 @@ type Encoder struct {
 // This function encodes a 'Document' into a CSV file
 func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{
-		writer: NewCSVWriter(w),
+		writer: csv.NewWriter(w),
 		err:    nil,
 	}
 }
 
-// This function sets a separator string for the CSV Encoder
-func (e *Encoder) Separator(s rune) {
-	e.writer.Separator(s)
-}
-
-// This function sets a carriage return for the CSV Encoder
-func (e *Encoder) CarriageReturn() {
-	e.writer.carriage = true
+// This function allows the user to customise the CSV writer
+func (e *Encoder) SetWriter(create func() CSVWriter) {
+	e.writer = create()
 }
 
 // This function returns the error of the CSV Encoder
